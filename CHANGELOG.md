@@ -1,8 +1,25 @@
 # Changelog
 
-All notable changes to the ticker-deep-dive skill. The version is stamped in `SKILL.md` and echoed at the top of every skill output ("Mode: QUICK (v11)").
+All notable changes to the ticker-deep-dive skill. The version is stamped in `SKILL.md` and echoed at the top of every skill output ("Mode: QUICK (v12)").
 
 The format follows the skill's own improvement rule: **one observed failure = one targeted patch.** Each entry names the real-session failure that drove it.
+
+## v12 — 2026-07-07
+
+### Added
+- **Move calibration (zero extra calls).** Phase 0 snapshot bumped `limit=7` → `limit=15` (same single call) so ATR-14 comes free. Every directional card now carries a MOVES line: ATR-14 (intraday range → stop hygiene) + weekly implied move = `implied_move_30` × √(7/30) (close-to-close displacement → target feasibility). Targets outside the weekly cone are labeled multi-week; stops inside ~1 ATR are labeled noise-stoppable.
+  - *Driver:* levels ladders named targets the options market priced as fantasy, and "tight" stops sat inside one day's normal range. Tested live on NET/LLY/PLTR/SNOW (2026-07-07).
+- **ATR ≈ 2× implied-daily documented as NORMAL** (range vs displacement; measured 2.0–2.2× on three names) — prevents misreading the gap as mispricing. Regime flag when realized close-to-close runs >1.3× implied.
+- **Straddle upgrade rule** (1 call, only when the name moved >3–4% or IVR jumped): nearest-Friday ATM ±2 strikes via `get_chains_for_expiry`. Documented endpoint traps: no bid/ask fields (theo/last only), ~80K-char overflow.
+  - *Driver:* √t scaling understated NET's cone ~25% on a +6% rip day — term structure inverts on event days.
+- **MOMENTUM hunt tag** — EARLY cross-checks the 5-day run; >25% in ~5 sessions retags as mid-move. (*Driver:* TENB tagged "EARLY" on day ~5 of a +50% news run.)
+- **CALL-SELLER hunt tag** — large negative net call premium failing bear skew = early-warning watch tag. (*Driver:* INTC flagged at −$90M call selling, matured into CLEAN-BEAR at −7% two sessions later.)
+- **Early-session gate** — first ~30 min of RTH: skew/premium immature, ratio screen structurally empty; run on prior-close data or stamp EARLY-SESSION. (*Driver:* a 9:41 ET hunt returned an empty ratio screen and distorted skews.)
+- **Confirm-mode package reconstruction** — OI-changes `volume_candles` reveal same-second spread legs without a tape re-pull. (*Driver:* a 7,500× 170/180 call credit spread initially read as two independent confirmations.)
+- **Ledger convention + cone grading** — `huntlog.md` location/append rules codified; Friday wrap-ups grade tag-vs-outcome AND weekly-cone containment.
+
+### Changed
+- **Confluence pillar 7 (price confirming)** now judged open-to-close AND close-vs-prior, never close-only. (*Driver:* WULF's "+4.9%" close/close masked a −8% open-to-close failed-gap reversal — close-only nearly mis-scored it.)
 
 ## v11 — 2026-07-07
 

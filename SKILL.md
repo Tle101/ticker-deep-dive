@@ -37,7 +37,7 @@ Detect capability, not platform: the question is whether a shell (jq/python) exi
 - **Confirm mode** ("confirm [TICKER]," "did that flow open," any next-day follow-up on a prior card): ≤2 calls. This is how UNCONFIRMED verdicts get resolved instead of dangling — see the Confirm section.
 - **Hunt mode** ("find me tickers," "scan the market," "what's moving," no tickers named): market-wide screener funnel → coherence-scored SHORTLIST of dive candidates. Never verdicts, never levels. Three profiles: EARLY (pre-move discovery), LOUD (biggest flow extremes), CONFIRM (follow-through). Distinct from scan mode (scan = user names 4+ tickers; hunt = user names none). See the Hunt section.
 
-**Skill version: v11.** State mode AND version at the start of every output — e.g., "Mode: QUICK (v11)". The stamp is the only reliable way to tell which uploaded copy answered when the same skill lives in Claude Code, claude.ai, and mobile. Bump the number on every edit to this file.
+**Skill version: v12.** State mode AND version at the start of every output — e.g., "Mode: QUICK (v11)". The stamp is the only reliable way to tell which uploaded copy answered when the same skill lives in Claude Code, claude.ai, and mobile. Bump the number on every edit to this file.
 
 **No stale-data shortcuts.** Every invocation of this skill — including a deep dive requested after an earlier quick pull or deep dive in the same conversation — re-runs every phase its mode requires, even if near-identical calls appear earlier in the session. Flow, tape, dealer positioning, and dark pool are the fast-moving layers this skill exists to read correctly; reusing them from even 20–30 minutes earlier defeats the purpose, especially in a deep dive where the person is relying on completeness. Do not skip a phase to save calls. If genuinely re-pulling would exceed the call budget, say so explicitly in the output rather than silently substituting old data.
 
@@ -45,11 +45,24 @@ Detect capability, not platform: the question is whether a shell (jq/python) exi
 
 ## Phase 0 — Snapshot (1 call)
 
-`get_ticker_ohlc_latest_or_date` with **limit=7** — same single call, seven daily rows (verified 2026-07-06: history is free; limit=1 throws the week away). Row 1 (today) is dense: spot/OHLC, net_premium, bullish/bearish premium, call/put volume with ask/bid splits, iv_rank, implied_move, OI. Read ALL of it — net_premium vs price direction is the first divergence check, iv_rank feeds the IV requirement. Rows 2–7 give the WEEK: read the daily net_premium sequence against the closes. A one-day divergence and a regime flip look identical in a single row (observed: +$ 109M on a red day read as "⚠️ divergence" alone, but the 7-row view showed −$ 266M/−$ 123M crash days immediately before — first positive net after capitulation, a far stronger signal). Flag: streaks (3+ same-sign days), sign flips after large moves, and IV-rank trajectory. `search_tickers` only if the symbol is ambiguous.
+`get_ticker_ohlc_latest_or_date` with **limit=15** — same single call, fifteen daily rows (verified 2026-07-06/07: history is free; limit=1 throws the week away; rows 8–15 exist solely to make ATR-14 free). Row 1 (today) is dense: spot/OHLC, net_premium, bullish/bearish premium, call/put volume with ask/bid splits, iv_rank, implied_move, OI. Read ALL of it — net_premium vs price direction is the first divergence check, iv_rank feeds the IV requirement. Rows 2–7 give the WEEK: read the daily net_premium sequence against the closes. A one-day divergence and a regime flip look identical in a single row (observed: +$ 109M on a red day read as "⚠️ divergence" alone, but the 7-row view showed −$ 266M/−$ 123M crash days immediately before — first positive net after capitulation, a far stronger signal). Flag: streaks (3+ same-sign days), sign flips after large moves, and IV-rank trajectory. `search_tickers` only if the symbol is ambiguous.
 
 **Earnings date sourcing (verified 2026-07-06):** the snapshot payload does NOT contain next_earnings_date. It appears only in tape print payloads (`get_option_trades` rows). Read it from the first tape pull. If tape comes back empty and the earnings gate matters to the verdict, the card must declare the blind spot: "ER date unavailable from this pull." ETFs have no earnings; skip the gate.
 
 **API clamps:** `min_premium` floors at $ 25,000 and `min_size` at 150 server-side. Thresholds below these are silently raised — never assume a sub-$ 25K pass ran.
+
+## Move calibration (zero extra calls — computed from the Phase 0 rows; added v12)
+
+Every directional card carries a MOVES line built from the snapshot alone:
+
+- **ATR-14** (avg true range over the 15 OHLC rows) = expected intraday RANGE. Job: **stop hygiene** — a stop closer than ~1 ATR is noise-stoppable; the card must say so and suggest the level outside it.
+- **Weekly implied move** = `implied_move_30` × √(7/30) (daily = ×√(1/30)) = expected close-to-close displacement. Job: **target feasibility** — a target outside the weekly cone is a multi-week thesis; label it.
+- **ATR ≈ 2× implied-daily is NORMAL** (range vs displacement; verified 2026-07-07 on LLY/PLTR/SNOW, ratio 2.0–2.2× on all three). Never read the gap as mispricing.
+- **Regime flag:** when trailing close-to-close moves run >~1.3× implied-daily, add "realized > implied — cone conservative this week."
+- **Straddle upgrade (1 call, ONLY when the name moved >3–4% today or IVR jumped):** `get_chains_for_expiry` at the nearest Friday, read ATM ±2 strikes. The payload has NO bid/ask (theo/last only) and overflows (~80K chars) — jq-extract the ATM slice, never read whole. √t scaling understates on rip days: term structure inverts (verified NET 2026-07-07: 3.1%/day near vs 2.8%/day at 10d — straddle cone ~25% wider than scaled).
+- Interpretation discipline: the cone is a seller-priced ~68–80% boundary, not a forecast (haircut ~15% for a median-expected move). Log each cone in the ledger and grade containment at Friday's close — the running hit-rate calibrates the whole feature.
+
+Card line format: `Moves: ATR $X/d (range) · ±$Y/wk implied (closes) — [target vs cone / stop vs ATR, one judgment]`
 
 ## Phase F1 — Aggregated flow (2 calls, batched)
 
@@ -121,10 +134,13 @@ Purpose: resolve a prior card's *"unconfirmed until tomorrow's OI update"* tag. 
    - **CLOSED/CHURN** (OI flat or down) → the print was closing or day-traded; downgrade or kill the verdict.
    - **PARTIAL** → say which fraction opened; hold conviction.
 4. Output is a 3–5 line delta card, not a full re-read: per-contract OPENED/CLOSED/PARTIAL, spot vs invalidation, one-line updated verdict per the reconciliation rule. Confirm mode never re-runs flow phases — if the user wants a fresh read, that is a new quick/deep run.
+5. **Package reconstruction for free (verified 2026-07-07):** the OI-changes payload's `volume_candles` double as a spread detector — same-timestamp, same-size volume spikes across two contracts of the same underlying are one package (observed: a 7,500× 170/180 call credit spread reconstructed from paired 14:10 candles, no tape re-pull needed). Check for sibling spikes before reading any single confirmed contract directionally.
 
 ## Hunt mode (market scan — find dive candidates, ≤7 calls)
 
 Hunt produces a SHORTLIST, never verdicts — no levels, no conviction, no directional card. Every tag is provisional until quick/deep mode runs on the name. Budget: ≤7 calls (typically 2–4 per profile).
+
+**Early-session gate (verified 2026-07-07):** in the first ~30 min of RTH, premium/skew are immature fractions of a day and the UNUSUAL ratio screen is structurally EMPTY (no name can reach 2× its own 30-day options volume that early — an empty result is a clock artifact, not a finding). Before ~10:00 ET, either run hunt on prior-close final data and flag only intraday deltas, or stamp the output "EARLY-SESSION — metrics immature" and skip the ratio screen entirely.
 
 **H1 — Pick a profile by intent (all `get_stock_screener`; API quirks verified 2026-07-07):**
 
@@ -135,6 +151,7 @@ Hunt produces a SHORTLIST, never verdicts — no levels, no conviction, no direc
 - BEAR: mirror — `min_net_put_premium "100000"`, `min_bearish_perc "0.55"`, `min_put_call_ratio "1.1"`, `max_change "-0.005"`, order `net_put_premium` desc
 - Variant: drop min/max_change to also catch contrarian dip/rip accumulation (observed 2026-07-06: GEO + CXW — same industry, both near 52wk highs, P/C 0.04/0.01 call accumulation on red days — a sector cluster no loud scan surfaces).
 - EARLY has NO mcap floor by design; flag anything <$1B as thin-tape-weak (flow reads degrade per the thin-tape rule).
+- **MOMENTUM retag (added v12):** cross-check the 5-day price run before tagging EARLY — a name already up >25% in ~5 sessions is mid-move, not pre-move; tag **MOMENTUM** instead (observed: TENB tagged "EARLY" on day ~5 of a +50% news run — the tag promised discovery the data didn't support).
 
 **LOUD profile — "what's the biggest flow today." 3 calls:**
 - BULL tail: `order=net_premium` desc · BEAR tail: same asc · UNUSUAL: `order=volume` desc with `min_ratio_30_day_total "2"` (options volume ≥2× the name's OWN 30-day norm)
@@ -145,7 +162,7 @@ Hunt produces a SHORTLIST, never verdicts — no levels, no conviction, no direc
 - `min_stock_volume "1000000"`, `min_stock_volume_vs_avg30_volume "1.8"`, `min_premium "750000"`, net premium floor "300000", skew floor "0.65", P/C ≤0.7 (bull) / ≥1.3 (bear), `min_change "0.02"` / `max_change "-0.02"`
 - CONFIRM names arrive with pumped IV by construction — any dive on them MUST weigh the IV requirement before structure.
 
-**PROMOTION LADDER (requires the ledger — persistence IS the signal):** an EARLY name that reappears on a later run with (a) rising stock-vol-vs-avg30, (b) expanding net premium, (c) skew strengthening not weakening, and (d) price confirming the direction, graduates toward CONFIRM → that graduate is the priority dive candidate. One appearance = watch; repeat appearance with improving readings = act.
+**PROMOTION LADDER (requires the ledger — persistence IS the signal).** Ledger convention: keep `huntlog.md` in the project scratchpad/working directory; every hunt run appends its shortlist + tags, every dive appends its verdict, and the weekly (Friday) wrap-up grades two things — tag direction vs actual outcome, and weekly-cone containment (did the close land inside the implied cone logged earlier in the week?). An EARLY name that reappears on a later run with (a) rising stock-vol-vs-avg30, (b) expanding net premium, (c) skew strengthening not weakening, and (d) price confirming the direction, graduates toward CONFIRM → that graduate is the priority dive candidate. One appearance = watch; repeat appearance with improving readings = act.
 
 **Two operating rhythms — pick by when the user is working:**
 - **OVERNIGHT (primary — after-hours DD to build next-day focus names):** one evening pass on final session data: EARLY bull+bear + LOUD (≤5 calls) → H2 + confluence → diff the ledger for persistence → deep dive the 1–2 graduates → output a next-day focus card (direction, levels, invalidation, "unconfirmed until OI"). H2c runs RETROSPECTIVE: window the tape to the session's final 60–90 minutes — flow clustering into the bell is a next-day follow-through tell; all-day dribble is not. Post-close data is final and deterministic (verified 2026-07-07), so evening runs are drift-free and same-day re-pulls are forbidden per the post-close rule. **THEN, next morning, ≤2 calls: Confirm mode on each dived focus name — did the flagged volume become new OI overnight?** OPENED → the focus name stands, conviction up one notch. CHURN → strike it from the day's list before risking anything. The overnight rhythm is not complete without the morning OI check; a focus card that never gets confirmed is a dangling verdict.
@@ -160,9 +177,9 @@ Hunt produces a SHORTLIST, never verdicts — no levels, no conviction, no direc
 4. **ER gate:** next_earnings_date >14 days out, else tag EVENT — scan-level data cannot distinguish conviction from hedging across a binary.
 5. Floors already enforced by the H1 filters (mcap ≥$2B, real premium).
 
-Tags: **CLEAN-BULL** · **CLEAN-BEAR** · **VOLUME-SPIKE** (participation elevated, direction mixed — often the best dive candidates) · **EVENT** (ER <14d) · **MUSH** (big net, failed skew — display once as a warning, never dive-worthy on this evidence) · **SPLIT-ARTIFACT** (corporate-action contamination, excluded).
+Tags: **CLEAN-BULL** · **CLEAN-BEAR** · **VOLUME-SPIKE** (participation elevated, direction mixed — often the best dive candidates) · **EVENT** (ER <14d) · **MUSH** (big net, failed skew — display once as a warning, never dive-worthy on this evidence) · **MOMENTUM** (>25% 5-day run — mid-move, not discovery) · **CALL-SELLER** (large negative net_call_premium that fails bear skew — an early-warning tag, watch not dive; observed: INTC flagged at −$90M call selling/44% skew, matured into CLEAN-BEAR at −7% two sessions later) · **SPLIT-ARTIFACT** (corporate-action contamination, excluded).
 
-**CONFLUENCE SCORE (0–7) — attach to every shortlisted name; ≥5 = dive-worthy.** Tags say WHAT a name is; the score says HOW MUCH agrees: (1) stock volume above its own 30d norm · (2) options premium above its own 30d norm · (3) net premium directional · (4) skew aligned with the net's direction · (5) clustered or repeated flow (same-session clustering via H2c, or multi-run persistence from the ledger) · (6) no ER/split/arbitrage distortion · (7) price confirming the direction. One loud metric with a 2/7 is noise by definition; a quiet name at 6/7 outranks a loud name at 3/7.
+**CONFLUENCE SCORE (0–7) — attach to every shortlisted name; ≥5 = dive-worthy.** Tags say WHAT a name is; the score says HOW MUCH agrees: (1) stock volume above its own 30d norm · (2) options premium above its own 30d norm · (3) net premium directional · (4) skew aligned with the net's direction · (5) clustered or repeated flow (same-session clustering via H2c, or multi-run persistence from the ledger) · (6) no ER/split/arbitrage distortion · (7) price confirming the direction — judged **open-to-close AND close-vs-prior**, never close-only (observed 2026-07-06: WULF "+4.9%" close/close masked a −8% open-to-close failed-gap reversal; the reversal WAS confirmation of the bear read, and close-only nearly mis-scored it). One loud metric with a 2/7 is noise by definition; a quiet name at 6/7 outranks a loud name at 3/7.
 
 **H2c — Urgency check (1 call, market hours only, finalists only).** The MCP exposes no interval-flow endpoint — approximate it with one time-windowed tape pull: `get_option_trades` on the finalist, `newer_than` ≈ 45 minutes ago, `intraday_only`, tier premium threshold. Ask-side concentration + low multileg ratio + size clustered inside the window = urgency (upgrades confluence #5); the same premium dribbled across the whole session = downgrade. Urgency distinguishes "someone needs this position NOW" from "someone is patiently averaging" — both matter, but they are different trades.
 
@@ -183,6 +200,7 @@ Quick mode output is a **report card per ticker — tight bullets, phone-readabl
 - Wk: the 7-day net-premium shape in one compact line (e.g., "wk: +267M → −266M → −123M → **+109M** — first positive since the flush") — from the snapshot rows, no extra call. Name streaks, flips, and whether today's net confirms or breaks the week's pattern
 - Prints: the top 1–3 trades by premium, each as `$prem · contract · side` (e.g., "$ 3.4M · Dec-27 125c · bought @ ask"). Aggressor side is mandatory — "bought/sold @ ask/bid," never just the tag. If nothing clears the threshold, say so: "no prints >$ 150K" is the finding.
 - IVR + next ER date (with days-out when inside ~45d)
+- Moves (directional cards only): ATR-14 + weekly implied cone with the one-line target/stop judgment (see Move calibration)
 - → Expert read, one line: what the tape says AND the level that kills it. E.g., "Whales structurally long; bearish net is small-lot noise. Read dies below 138."
 
 **Print supremacy rule.** The VERDICT derives from the largest prints — identifiable actors with size — never from net premium alone. Net premium is a screening stat: display it, but when net and prints diverge (they did on ORCL: -$ 15M net vs $ 5.5M of bullish structural prints), the prints win and the ⚠️ must appear. A verdict justified only by the net aggregate is an invalid card.
