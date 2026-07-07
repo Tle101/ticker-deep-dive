@@ -16,6 +16,25 @@ Turns "deep dive NVDA" into a structured, decision-grade read: who is paying up,
 | **Confirm** | "confirm TSLA", any next-day follow-up | ≤2 | Did yesterday's flagged volume become real open interest? OPENED / CHURN / PARTIAL per contract |
 | **Hunt** | "find me tickers", "what's moving" | ≤7 | Market-wide screener funnel → coherence-scored shortlist of dive candidates (EARLY / LOUD / CONFIRM profiles) |
 
+### What the output looks like
+
+A real deep-dive card (LLY, 2026-07-07 — condensed):
+
+> **Mode: DEEP (v11)**
+>
+> **LLY $1,236 (+3.0%) — BULLISH, MODERATE conviction**
+> - Net: +$1.6M (bull $5.8M / bear $4.2M) — 58% skew, puts being sold
+> - Tape at the $500K tier: **empty** — but the strike pull caught what the tape missed: **$7.1M deep-ITM Jul 1000C bought @ ask** (delta-one stock replacement), $2.5M 1200C bought, 1140P sold ($424K floor bet)
+> - Wk: capitulation low 1128 (6/26) → +80pt reversal → breaking the 1200–1230 chop to a fresh high
+> - IVR 74.8 (rich — spreads over naked premium) · ER 8/6 (30d, clear)
+> - Catalyst: Medicare GLP-1 Bridge Program launched 7/1 (~20M eligible patients); JPM PT → $1,400
+>
+> **Dealer map:** positive gamma above 1200 (grinds, doesn't launch). Wall ladder 1240 → 1250 → 1260 → **1300** (major). Max pain fights the bulls: Jul-10 pins at **1145**. Dark pool nodes live at 1230–1235.
+>
+> **What kills this thesis:** (1) max pain 1145/1100 pulls hard into Friday — a 1240 rejection round-trips to 1200; (2) $662K of 1100P buying + 1250C/1400C selling = hedging and upside-capping alongside the bull flow.
+>
+> **The trade:** don't chase 1236 into the 1240–1260 wall. Buy the pullback to **1200–1210**, or a confirmed hold **>1240**. Invalidation: below 1200; hard kill below 1160. *Volume > OI = unconfirmed until tomorrow's OI update.*
+
 ### The discipline baked in
 
 - **Print supremacy** — verdicts trace to specific large prints, never to net-premium aggregates alone
@@ -77,7 +96,9 @@ git clone https://github.com/Tle101/ticker-deep-dive.git .claude/skills/ticker-d
 
 ### claude.ai / mobile (upload as a `.skill` file)
 
-Package the skill folder as a zip whose root folder matches the skill name:
+**Easiest:** download the pre-packaged [`dist/tickerdeepdive-v11.skill`](dist/tickerdeepdive-v11.skill) and upload it in your claude.ai skill settings (or attach it in a conversation and ask Claude to install it). No shell needed.
+
+Or package it yourself from source (the zip's root folder must match the skill name):
 
 ```bash
 git clone https://github.com/Tle101/ticker-deep-dive.git
@@ -86,8 +107,6 @@ mkdir -p /tmp/pkg/ticker-deep-dive
 cp SKILL.md /tmp/pkg/ticker-deep-dive/
 cd /tmp/pkg && zip -r tickerdeepdive.skill ticker-deep-dive/
 ```
-
-Upload `tickerdeepdive.skill` in your claude.ai skill settings (or attach it in a conversation and ask Claude to install it).
 
 ### Verify the install
 
