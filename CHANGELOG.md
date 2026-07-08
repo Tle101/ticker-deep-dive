@@ -4,6 +4,17 @@ All notable changes to the ticker-deep-dive skill. The version is stamped in `SK
 
 The format follows the skill's own improvement rule: **one observed failure = one targeted patch.** Each entry names the real-session failure that drove it.
 
+## v14 — 2026-07-08
+
+### Added
+- **Premium-buy mode (naked calls/puts) — built and validated by a 4-regime blind historical backtest**, not by intuition. Replayed the evening pipeline as-of ~30 past sessions across four tapes (de-risk, chop, downtrend/IV-spike, rally/vol-crush; ~180 blind candidates, ~47 emitted), scored option-payoff proxies at realistic next-open fills, graded against what actually happened.
+  - **Headline finding — direction alignment dwarfs every flow pillar.** Trend-aligned cards won by huge margins (rally window: bulls 4/4 vs bears 1/8; downtrend window: bears 67% vs bulls 29%); counter-trend emissions were the single largest loss source. So the mode leads with a hard **REGIME GATE**: uptrend → calls only, downtrend → puts only, **chop → stand down** (chop lost money in every configuration). The gate refuses far more than it emits.
+  - **~90% of all losses in every regime were directional reversal** — theta-bleed and vega-crush losses were both rare. Even in the window designed to punish vega, only 1 of 12 emitted cards was crushed (and it outran the crush). Doctrine encoded: the risk on a 1–2 week naked hold is *being wrong on direction*, not decay or IV. Every card names the reversal level as its kill.
+  - **Anti-chase is regime-conditional** (the backtest's sharpest correction): chasing loses in chop but WINS in a confirmed trend (chasers 56% and 45% in the two trending windows). So anti-chase is ON in chop/weak trends, OFF in strong trends — not a global veto.
+  - **IVR downgraded from hard gate to disclosure.** Elevated IV rarely crushed buyers ("priced to move"); the 60–90 band was the worst cohort in 3 of 4 windows (extended-name tell) but ≥90 real-movers were fine. Cards state IVR + breakeven-in-implied-days rather than vetoing.
+  - **Entry realism:** all internal grading assumes next-open fills; overnight gaps (~0.2 cone) roughly halve close-graded edge.
+  - Status stamped as *framework validated on historical replay*, not proven edge — live forward test with real option P&L is the pending confirmation.
+
 ## v13 — 2026-07-07
 
 ### Added

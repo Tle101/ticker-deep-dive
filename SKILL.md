@@ -37,8 +37,9 @@ Detect capability, not platform: the question is whether a shell (jq/python) exi
 - **Confirm mode** ("confirm [TICKER]," "did that flow open," any next-day follow-up on a prior card): ≤2 calls. This is how UNCONFIRMED verdicts get resolved instead of dangling — see the Confirm section.
 - **Hunt mode** ("find me tickers," "scan the market," "what's moving," no tickers named): market-wide screener funnel → coherence-scored SHORTLIST of dive candidates. Never verdicts, never levels. Three profiles: EARLY (pre-move discovery), LOUD (biggest flow extremes), CONFIRM (follow-through). Distinct from scan mode (scan = user names 4+ tickers; hunt = user names none). See the Hunt section.
 - **Sector mode** ("strongest in semis," "scan software," "which mag 7 is leading," "how do the nuclears look" — a THEME named, not tickers): one basket-screener call → ranked leaderboard of the theme. Distinct from scan (scan = user's tickers, per-name cards) and hunt (hunt = whole market). See the Sector section.
+- **Premium-buy mode** ("best naked call/put idea," "what should I buy calls on," "clearest option to buy," any request for a long-premium trade idea): runs a normal quick/deep read FIRST, then applies the naked-premium gate on top. The gate is a hard **market-regime filter** before anything else — see the Premium-buy section. This mode can and often should conclude "no card — stand down."
 
-**Skill version: v13.** State mode AND version at the start of every output — e.g., "Mode: QUICK (v11)". The stamp is the only reliable way to tell which uploaded copy answered when the same skill lives in Claude Code, claude.ai, and mobile. Bump the number on every edit to this file.
+**Skill version: v14.** State mode AND version at the start of every output — e.g., "Mode: QUICK (v11)". The stamp is the only reliable way to tell which uploaded copy answered when the same skill lives in Claude Code, claude.ai, and mobile. Bump the number on every edit to this file.
 
 **No stale-data shortcuts.** Every invocation of this skill — including a deep dive requested after an earlier quick pull or deep dive in the same conversation — re-runs every phase its mode requires, even if near-identical calls appear earlier in the session. Flow, tape, dealer positioning, and dark pool are the fast-moving layers this skill exists to read correctly; reusing them from even 20–30 minutes earlier defeats the purpose, especially in a deep dive where the person is relying on completeness. Do not skip a phase to save calls. If genuinely re-pulling would exceed the call budget, say so explicitly in the output rather than silently substituting old data.
 
@@ -232,6 +233,34 @@ End with ONE line naming the 1–2 tickers that earn the dive and why — then s
 End with ONE line: which name earns the dive and why. **Sector mode ranks; it never issues verdicts or levels** — screener rows are same-day snapshots with no trend/ATR history, so the MOVES line and any trade framing require the leader's own Phase-0 pull (that's the dive).
 
 **S5 — Optional drill (1–2 calls):** Phase-0 snapshot on the leader (adds trend + ATR/cone), or `get_market_sector_etfs` for sector-level context when the ask is macro ("which sectors are strong" with no theme).
+
+## Premium-buy mode (naked calls/puts — the trade-idea gate; added v14)
+
+For requests that want a specific long-premium trade ("best naked call/put," "what do I buy calls on"). This mode exists because naked premium has three ways to lose — direction, time, vol — and a bullish-and-right read still loses money most ways. It was built from a 4-regime blind historical backtest (2026-07; de-risk, chop, downtrend, rally/vol-crush windows, ~180 candidates). **The backtest overturned the intuitive rules and produced one dominant finding, so this mode is deliberately spare.**
+
+**THE FINDING (why this mode is mostly a filter, not a generator):** across all four regimes, **market-direction alignment dwarfed every flow pillar.** In the rally window trend-aligned bulls went 4/4 while bears went 1/8; in the downtrend window bears won and bulls buying bounces went 2/7; in chop nothing directional worked. ~90% of ALL losses in every regime were **directional reversal** — theta-bleed and vega-crush losses were both rare (even in the window built to punish vega, only 1 of 12 cards was crushed, and it outran the crush). **The risk in naked premium on a ~1-2 week hold is being wrong on direction, not decay and not IV.**
+
+**STEP 0 — REGIME GATE (do this FIRST; it decides whether a card can exist at all).**
+Read the tape's direction before screening anything: SPY/QQQ price vs its 10- and 20-day trend, plus the sector-ETF breadth sweep (Sector-mode macro variant).
+- **UPTREND** (index above rising 10/20d, breadth green) → only **CALL** cards allowed. Suppress put ideas.
+- **DOWNTREND** (index below falling 10/20d, breadth red) → only **PUT** cards allowed. Suppress call ideas.
+- **CHOP** (index net-flat over ~10d with normal daily wiggle) → **STAND DOWN. Emit no directional card.** Chop lost money in every configuration tested; the correct output is "no trade — chop tape, premium buying has no edge here, wait for a trend or trade a defined-risk spread instead."
+Counter-trend cards are the single largest loss source in the data — the gate's whole job is to refuse them.
+
+**STEP 1 — Candidate: trend-aligned flow only.** In an uptrend, take the strongest bullish name from a quick/hunt/sector read (net call premium + bull skew + price confirming); downtrend, the strongest bearish. The name must agree with BOTH the flow AND the regime. A bullish-flow name in a downtrend is not a call candidate — it's a bounce to fade or ignore.
+
+**STEP 2 — NAKED-SCORE checks (regime-scoped, not a rigid gate):**
+1. **Trend-aligned** (mandatory — from Step 0). No alignment → no card.
+2. **Strike inside the weekly cone** (v12 MOVES line): target ≤ the cone edge, strike ≤ ~0.5 cone OTM. Strikes outside the cone need a multi-week expiry, not a weekly. (This pillar held up as sane across all regimes.)
+3. **Earnings clear** — no ER inside the intended hold (still a real binary; keep it).
+4. **Anti-chase is REGIME-CONDITIONAL** — the backtest's sharpest correction. In CHOP/early/weak trends, do NOT chase (fail if the prior 3-day move ≥ 0.75 cone, and skip if the entry gaps ≥0.25 cone further your way). In a STRONG confirmed trend, anti-chase INVERTS — continuation wins, so do not veto a trend-aligned entry just because it ran. (Chasers won 56% and 45% in the two trending windows, lost in chop.)
+5. **IVR is DISCLOSURE, not a veto.** State IVR and the breakeven in implied-days on the card; do not reject on high IV. Elevated IV rarely crushed the buyers in testing — it usually means "priced to move," and the move outran the vega. One caution to print: the IVR 60–90 band was the worst-performing cohort in 3 of 4 windows (it tends to flag extended, about-to-revert names), so on a 60–90 name lean on the trend/cone checks harder. IVR ≥90 in a real mover is fine.
+
+**STEP 3 — The PREMIUM-BUY card** (only if Step 0 passed and it's trend-aligned):
+`BUY [strike/expiry] · regime: UPTREND/DOWNTREND · trend-aligned ✓ · entry (next open) · stop (invalidation, ≥1 ATR away) · target (≤ cone edge) · breakeven: N implied-days · IVR X (disclosure) · what kills it: [the reversal level]`
+Every card names the **reversal level** as the kill — because reversal, not decay, is the risk. Grade/quote fills at the NEXT OPEN, never the signal close (overnight gaps averaged ~0.2 cone and halve the edge).
+
+**When to emit nothing:** chop tape · no trend-aligned name with clean flow · only counter-trend ideas available · strike only reachable outside the cone with a weekly. "No card, here's why" is the correct and common answer — this mode refuses far more than it emits. Status: framework validated on historical replay (4 regimes); treat live cards as tracked hypotheses until the forward test logs real option P&L, not proven edge.
 
 ## Synthesis (no calls)
 
