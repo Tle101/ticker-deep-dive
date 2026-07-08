@@ -4,6 +4,14 @@ All notable changes to the ticker-deep-dive skill. The version is stamped in `SK
 
 The format follows the skill's own improvement rule: **one observed failure = one targeted patch.** Each entry names the real-session failure that drove it.
 
+## v13 — 2026-07-07
+
+### Added
+- **Sector mode (1–3 calls).** New trigger: a THEME named instead of tickers ("strongest in semis," "scan the mags," "how's memory looking"). One `get_stock_screener` call on a curated ticker basket returns the full ranking board (perc_change, net premiums, skew, IVR, relative volume, ER dates); names are scored on 4 pillars (price leading · flow confirming · participation · clean) and output as a leaderboard with LEADER / FLOW-DIVERGENT / LAGGARD / EVENT-GATED tags plus a basket-level regime note (sector-wide tilt, sell-premium IVR regime). Ranks only — never verdicts or levels; the leader's dive still requires its own Phase-0 pull.
+  - *Driver:* a Mag-7 "which is ready to run" scan cost 7 Phase-0 calls; one basket-screener call reproduced ~90% of the ranking signal. Battle-tested 2026-07-07 on semis (14 names) + memory (4 names): the leaderboard independently matched a full day of per-name dives (same leader, same laggard) AND caught a price/flow divergence a flow-alert-only hunt read had missed (−7.4% day behind the basket's biggest net call buying = dip accumulation, not strength).
+- **Theme resolver table** (~20 trader themes: mags, semis, semicap, memory, networking/optics, software, cyber, AI-infra/neocloud, quantum, nuclear, space, defense, crypto-linked, EV, fintech, GLP-1, energy, financials, china tech) with a fallback rule for unknown themes (best-guess basket, name the proxy, invite correction). Baskets are dated; membership edits are maintenance, not version bumps.
+- **Endpoint trap documented:** the screener's `etfs` constituent param returned EMPTY for SMH — curated `ticker` comma-lists are the reliable path; the `sectors` enum covers only the 11 GICS sectors.
+
 ## v12 — 2026-07-07
 
 ### Added

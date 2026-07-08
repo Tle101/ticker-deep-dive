@@ -15,6 +15,7 @@ Turns "deep dive NVDA" into a structured, decision-grade read: who is paying up,
 | **Scan** | 4+ tickers named | 2–3/name | Breadth-first cards across a watchlist |
 | **Confirm** | "confirm TSLA", any next-day follow-up | ≤2 | Did yesterday's flagged volume become real open interest? OPENED / CHURN / PARTIAL per contract |
 | **Hunt** | "find me tickers", "what's moving" | ≤7 | Market-wide screener funnel → coherence-scored shortlist of dive candidates (EARLY / LOUD / CONFIRM profiles) |
+| **Sector** | "strongest in semis", "scan the mags", "how's memory looking" | 1–3 | Theme leaderboard from one basket-screener call: LEADER / FLOW-DIVERGENT / LAGGARD tags + basket regime note (~20 trader themes built in) |
 
 ### What the output looks like
 
@@ -96,7 +97,7 @@ git clone https://github.com/Tle101/ticker-deep-dive.git .claude/skills/ticker-d
 
 ### claude.ai / mobile (upload as a `.skill` file)
 
-**Easiest:** download the pre-packaged [`dist/tickerdeepdive-v12.skill`](dist/tickerdeepdive-v12.skill) and upload it in your claude.ai skill settings (or attach it in a conversation and ask Claude to install it). No shell needed.
+**Easiest:** download the pre-packaged [`dist/tickerdeepdive-v13.skill`](dist/tickerdeepdive-v13.skill) and upload it in your claude.ai skill settings (or attach it in a conversation and ask Claude to install it). No shell needed.
 
 Or package it yourself from source (the zip's root folder must match the skill name):
 
@@ -110,7 +111,7 @@ cd /tmp/pkg && zip -r tickerdeepdive.skill ticker-deep-dive/
 
 ### Verify the install
 
-Ask Claude: `quick pull SPY`. Every output opens with a mode + version stamp, e.g. **"Mode: QUICK (v12)"** — if you see the stamp, the skill is live and you know exactly which version answered.
+Ask Claude: `quick pull SPY`. Every output opens with a mode + version stamp, e.g. **"Mode: QUICK (v13)"** — if you see the stamp, the skill is live and you know exactly which version answered.
 
 ## Usage examples
 
@@ -120,6 +121,7 @@ quick pull TSLA AMD
 scan rklb lly glw shop vst
 confirm TEVA            # next-day: did yesterday's flagged flow open as OI?
 run hunt                # market-wide scan for dive candidates
+strongest in semis      # sector mode: theme leaderboard in 1 call (mags, memory, nuclear, quantum...)
 find me tickers with clean directional flow
 ```
 
@@ -131,7 +133,7 @@ Typical rhythm for swing traders (the skill's primary design target):
 
 ## Versioning
 
-The skill version is stamped in `SKILL.md` (currently **v12**) and echoed at the top of every output. The version bumps on **every** edit to `SKILL.md` — this is how you tell which copy answered when the same skill lives in Claude Code, claude.ai, and mobile at once.
+The skill version is stamped in `SKILL.md` (currently **v13**) and echoed at the top of every output. The version bumps on **every** edit to `SKILL.md` — this is how you tell which copy answered when the same skill lives in Claude Code, claude.ai, and mobile at once.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full evolution and the observed failures that drove each patch.
 

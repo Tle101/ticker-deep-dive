@@ -36,8 +36,9 @@ Detect capability, not platform: the question is whether a shell (jq/python) exi
 - **Deep mode** ("deep dive," "full DD," multi-day swing consideration): Phases 0, F1, F2, F3 (week sweep), then D1–D3.
 - **Confirm mode** ("confirm [TICKER]," "did that flow open," any next-day follow-up on a prior card): ≤2 calls. This is how UNCONFIRMED verdicts get resolved instead of dangling — see the Confirm section.
 - **Hunt mode** ("find me tickers," "scan the market," "what's moving," no tickers named): market-wide screener funnel → coherence-scored SHORTLIST of dive candidates. Never verdicts, never levels. Three profiles: EARLY (pre-move discovery), LOUD (biggest flow extremes), CONFIRM (follow-through). Distinct from scan mode (scan = user names 4+ tickers; hunt = user names none). See the Hunt section.
+- **Sector mode** ("strongest in semis," "scan software," "which mag 7 is leading," "how do the nuclears look" — a THEME named, not tickers): one basket-screener call → ranked leaderboard of the theme. Distinct from scan (scan = user's tickers, per-name cards) and hunt (hunt = whole market). See the Sector section.
 
-**Skill version: v12.** State mode AND version at the start of every output — e.g., "Mode: QUICK (v11)". The stamp is the only reliable way to tell which uploaded copy answered when the same skill lives in Claude Code, claude.ai, and mobile. Bump the number on every edit to this file.
+**Skill version: v13.** State mode AND version at the start of every output — e.g., "Mode: QUICK (v11)". The stamp is the only reliable way to tell which uploaded copy answered when the same skill lives in Claude Code, claude.ai, and mobile. Bump the number on every edit to this file.
 
 **No stale-data shortcuts.** Every invocation of this skill — including a deep dive requested after an earlier quick pull or deep dive in the same conversation — re-runs every phase its mode requires, even if near-identical calls appear earlier in the session. Flow, tape, dealer positioning, and dark pool are the fast-moving layers this skill exists to read correctly; reusing them from even 20–30 minutes earlier defeats the purpose, especially in a deep dive where the person is relying on completeness. Do not skip a phase to save calls. If genuinely re-pulling would exceed the call budget, say so explicitly in the output rather than silently substituting old data.
 
@@ -190,6 +191,47 @@ Tags: **CLEAN-BULL** · **CLEAN-BEAR** · **VOLUME-SPIKE** (participation elevat
 **Output card (phone-first, max 8 rows):**
 `TICKER $spot ±% · net $X · skew B% · vol ×N vs 30d · IVR · ER-days · TAG`
 End with ONE line naming the 1–2 tickers that earn the dive and why — then stop. Hunt picks where the next 6–14 calls go; it never replaces them.
+
+## Sector mode (theme leaderboard, 1–3 calls; added v13)
+
+**Trigger:** the user names a THEME, not tickers — "strongest in semis," "scan the mags," "how's memory looking," "best software name." Driver: a Mag-7 "which is ready to run" request cost 7 Phase-0 calls (one per name); one basket-screener call reproduced ~90% of the ranking signal (verified 2026-07-07 on semis + memory baskets — the sector leaderboard independently matched a full day of per-name dives: same leader, same laggard, same divergence names).
+
+**S1 — Resolve the theme (0 calls).** Resolver table below. Unknown theme → best-guess a basket from knowledge, NAME the proxy used in the output, and invite correction ("scan shipping: used X/Y/Z"). User-supplied tickers always override.
+
+| Theme | Basket (curated, dated 2026-07) |
+|---|---|
+| mag7 / mags | AAPL MSFT GOOGL AMZN NVDA META TSLA |
+| semis | NVDA AMD AVGO TSM INTC QCOM TXN AMAT LRCX KLAC MRVL ADI ASML ARM |
+| semicap | AMAT LRCX KLAC ASML |
+| memory/storage | MU WDC STX SNDK |
+| networking/optics | ANET CRDO ALAB COHR LITE MRVL |
+| software | MSFT ORCL CRM NOW SNOW MDB DDOG NET PLTR |
+| cybersecurity | CRWD PANW ZS NET S FTNT |
+| AI-infra/neocloud | CRWV NBIS IREN APLD WULF VRT SMCI DELL |
+| quantum | IONQ RGTI QBTS QUBT |
+| nuclear | OKLO SMR LEU CCJ VST CEG NLR |
+| space | RKLB ASTS LUNR RDW |
+| defense | LMT RTX NOC GD KTOS AVAV |
+| crypto-linked | COIN MSTR HOOD MARA RIOT WULF IREN |
+| EV/autonomy | TSLA RIVN LCID UBER |
+| fintech/brokers | HOOD SOFI COIN SQ PYPL |
+| GLP-1/pharma | LLY NVO AMGN VKTX |
+| energy | XOM CVX COP SLB OXY (or sectors=["Energy"]) |
+| financials | JPM GS MS BAC WFC C (or sectors=["Financial Services"]) |
+| china tech | BABA PDD JD BIDU |
+| big-cap GICS sectors | use the screener `sectors` enum directly |
+
+**Endpoint trap (verified 2026-07-07):** the screener's `etfs` constituent param returned EMPTY for SMH — do NOT rely on it. Curated `ticker` comma-lists are the primary path; `sectors` enum works for the 11 GICS sectors only. Baskets go stale — the table is dated; membership edits are normal maintenance, not version bumps.
+
+**S2 — The one ranking call.** `get_stock_screener` with `ticker="A,B,C,..."`, `order=perc_change desc`, limit ≥ basket size. Every ranking metric arrives in one shot: perc_change, net call/put premium, bullish/bearish premium, IVR, put/call ratio, relative_volume, next_earnings_date.
+
+**S3 — Rank (0 calls).** Score each name on 4 pillars: **price leading** (day % vs basket median) · **flow confirming** (net-premium sign agrees with price; bull/bear premium split ≥55% helps) · **participation** (relative_volume ≥ ~1) · **clean** (ER >14d, no split/distortion flags). LEADER = strongest on ≥3. Also mark: **FLOW-DIVERGENT** (price and flow disagree — e.g., −7% day with the basket's biggest net call buying = dip accumulation; price up with put-heavy flow = fade risk) and the **LAGGARD** (weakest price + flow agreeing down = the short-side candidate). Never rank on price alone — the divergence column is half the value (observed: a hunt's "MRVL call accumulation" read lacked the −7.4% price context; the sector table caught it in the same call).
+
+**S4 — Regime + output (phone-first).** Note the basket's aggregate tilt (all-red/all-green = sector trade, not stock-picking) and the IVR regime (basket IVR ≥~85 = sell-premium regime; flag that long options overpay). Leaderboard card, max ~8 rows:
+`TICKER $spot ±% · net $X · skew · IVR · ER-days · tag(LEADER/CONFIRMED/FLOW-DIVERGENT/LAGGARD/EVENT-GATED)`
+End with ONE line: which name earns the dive and why. **Sector mode ranks; it never issues verdicts or levels** — screener rows are same-day snapshots with no trend/ATR history, so the MOVES line and any trade framing require the leader's own Phase-0 pull (that's the dive).
+
+**S5 — Optional drill (1–2 calls):** Phase-0 snapshot on the leader (adds trend + ATR/cone), or `get_market_sector_etfs` for sector-level context when the ask is macro ("which sectors are strong" with no theme).
 
 ## Synthesis (no calls)
 
